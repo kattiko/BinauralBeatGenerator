@@ -32,7 +32,6 @@
         const baseToneInput = document.getElementById('baseTone');
         const currentBeatDisplay = document.getElementById('current-beat');
         const currentFrequencyDisplay = document.getElementById('current-frequency');
-        const earFrequenciesDisplay = document.getElementById('ear-frequencies');
         const timeRemainingDisplay = document.getElementById('time-remaining');
         const progressBar = document.getElementById('progress');
 
@@ -318,7 +317,6 @@
             // Update frequency displays
             currentBinauralFrequency = segment.startFreq;
             currentFrequencyDisplay.textContent = `Current Binaural Beat: ${segment.startFreq.toFixed(1)} Hz`;
-            earFrequenciesDisplay.textContent = `L: ${leftFreq.toFixed(1)} Hz | R: ${rightFreq.toFixed(1)} Hz`;
             
             // Set current beat display
             updateCurrentSegmentDisplay();
@@ -440,7 +438,6 @@
             
             // Update display frequencies
             currentFrequencyDisplay.textContent = `Current Binaural Beat: ${currentFreq.toFixed(1)} Hz`;
-            earFrequenciesDisplay.textContent = `L: ${leftFreq.toFixed(1)} Hz | R: ${rightFreq.toFixed(1)} Hz`;
         }
 
         // Update progress bar and time displays
@@ -580,7 +577,6 @@
             currentBeatDisplay.textContent = 'Current: Not playing';
             timeRemainingDisplay.textContent = 'Time: --:--:--';
             currentFrequencyDisplay.textContent = 'Current Binaural Beat: 0.0 Hz';
-            earFrequenciesDisplay.textContent = 'L: 0.0 Hz | R: 0.0 Hz';
             progressBar.style.width = '0%';
             
             // Update media session state
