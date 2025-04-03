@@ -619,4 +619,4 @@
         });
 
         // Initialize with example instructions
-        instructionsTextarea.value = '10 to 4hz 1 hr, 4 hz to 3hz 15min, 3hz to 4hz 15min, 4 hz to 3hz 15min, 3hz to 4hz 15min, 4hz 4hr, 4 hz to 3hz 15min, 3hz to 4hz 15min, 4 hz to 3hz 15min, 3hz to 4hz 15min, 4hz to 10hz 1hr';
+        instructionsTextarea.value = '10 to 7hz 1 hr';
