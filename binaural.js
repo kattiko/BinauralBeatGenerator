@@ -863,3 +863,26 @@ async function generateAndDownloadAudio() {
         downloadButton.innerHTML = 'Download';
         downloadButton.classList.remove('processing');
     }
+
+    }
+
+// Add this immediately after the last function (after the closing brace of generateAndDownloadAudio)
+// This will set up the event listeners when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Connect play button to togglePlayPause function
+    playButton.addEventListener('click', togglePlayPause);
+    
+    // Connect restart button to handleRestart function
+    restartButton.addEventListener('click', handleRestart);
+    
+    // Connect download button to generateAndDownloadAudio function
+    downloadButton.addEventListener('click', generateAndDownloadAudio);
+
+    // Optional: Add event listener for space key to toggle play/pause
+    document.addEventListener('keydown', function(event) {
+        if (event.code === 'Space') {
+            event.preventDefault(); // Prevent page scrolling
+            togglePlayPause();
+        }
+    });
+}); // <- This closing bracket was missing
