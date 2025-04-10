@@ -879,10 +879,14 @@ document.addEventListener('DOMContentLoaded', function() {
     downloadButton.addEventListener('click', generateAndDownloadAudio);
 
     // Optional: Add event listener for space key to toggle play/pause
-    document.addEventListener('keydown', function(event) {
+       document.addEventListener('keydown', function(event) {
         if (event.code === 'Space') {
-            event.preventDefault(); // Prevent page scrolling
-            togglePlayPause();
+            // Check if the active element is NOT the instructions textarea
+            if (document.activeElement !== instructionsTextarea) {
+                event.preventDefault(); // Prevent page scrolling
+                togglePlayPause();
+            }
         }
+            // If we're in the textarea, allow default behavior (typing a space)
     });
 }); // <- This closing bracket was missing
