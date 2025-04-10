@@ -47,15 +47,24 @@ function setupMediaSession() {
         });
 
         navigator.mediaSession.setActionHandler('play', () => {
-            resumePlaying();
+            // Only respond if we're not typing in the textarea
+            if (document.activeElement !== instructionsTextarea) {
+                resumePlaying();
+            }
         });
         
         navigator.mediaSession.setActionHandler('pause', () => {
-            pausePlaying();
+            // Only respond if we're not typing in the textarea
+            if (document.activeElement !== instructionsTextarea) {
+                pausePlaying();
+            }
         });
         
         navigator.mediaSession.setActionHandler('stop', () => {
-            stopPlaying();
+            // Only respond if we're not typing in the textarea
+            if (document.activeElement !== instructionsTextarea) {
+                stopPlaying();
+            }
         });
     }
 }
@@ -879,16 +888,16 @@ document.addEventListener('DOMContentLoaded', function() {
     downloadButton.addEventListener('click', generateAndDownloadAudio);
 
     // Optional: Add event listener for space key to toggle play/pause
-       document.addEventListener('keydown', function(event) {
+document.addEventListener('keydown', function(event) {
     if (event.code === 'Space') {
-        // First check if we're in the textarea
+        // Exit immediately if we're in the textarea
         if (document.activeElement === instructionsTextarea) {
-            // Do nothing - allow default space behavior for typing
-            return; // Important: exit the handler completely
+            return;
         }
         
-        // If we got here, we're not in the textarea
-        event.preventDefault(); // Prevent page scrolling
+        // Otherwise prevent default and toggle play/pause
+        event.preventDefault();
+        event.stopPropagation(); // Stop event from bubbling up
         togglePlayPause();
     }
             // If we're in the textarea, allow default behavior (typing a space)
