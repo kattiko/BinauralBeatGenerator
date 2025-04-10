@@ -21,7 +21,10 @@
         <div class="buttons">
             <button id="play" aria-label="Play or pause audio">Play</button>
             <button id="restart" aria-label="Restart audio sequence">Restart</button>
+            <button id="download" aria-label="Generate and download audio file">Download</button>
         </div>
+        
+        <div id="download-status" class="download-status"></div>
         
         <div class="status">
             <div id="current-beat">Current: Not playing</div>
@@ -44,6 +47,16 @@
                 <li>"4hz to 6hz 2 hr" - Gradually change from 4Hz to 6Hz over 2 hours</li>
             </ul>
             <p>Separate multiple instructions with commas.</p>
+        </div>
+        
+        <div class="download-info">
+            <h3>Download Feature</h3>
+            <p>The download button generates a high-quality WAV file of your binaural beats session. Please note:</p>
+            <ul>
+                <li>Longer sessions may take time to process</li>
+                <li>Downloaded files are stereo, 16-bit, 44.1kHz WAV format</li>
+                <li>The generated audio will follow exactly what you've specified in the instructions</li>
+            </ul>
         </div>
     </div>
     <script src="binaural.js"></script>
