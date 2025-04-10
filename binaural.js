@@ -704,9 +704,11 @@ async function generateAndDownloadAudio() {
         return;
     }
     
-    // Update status
+    // Update status and button appearance
     downloadStatusDisplay.textContent = 'Preparing audio file...';
     downloadButton.disabled = true;
+    downloadButton.innerHTML = '<span class="spinner"></span> Processing...';
+    downloadButton.classList.add('processing');
     
     // Parse segments and get total duration
     const sessionSegments = parsedSegments;
@@ -823,8 +825,18 @@ async function generateAndDownloadAudio() {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
         
-        // Update status
-        downloadStatusDisplay.textContent = 'Download complete!';
+        // Update status and reset progress bar
+        progressBar.style.width = '100%';
+        setTimeout(() => {
+            progressBar.style.width = '0%';
+        }, 1000);
+        
+        // Show completion message with file size
+        const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+        downloadStatusDisplay.textContent = `Download complete! File size: ${fileSizeMB}MB`;
+        downloadButton.innerHTML = 'Download';
+        
+        // Clear message after a delay
         setTimeout(() => {
             downloadStatusDisplay.textContent = '';
         }, 5000);
@@ -832,7 +844,10 @@ async function generateAndDownloadAudio() {
         console.error('Error creating audio file:', error);
         downloadStatusDisplay.textContent = 'Error creating audio file. Please try again.';
     } finally {
+        // Reset button state
         downloadButton.disabled = false;
+        downloadButton.innerHTML = 'Download';
+        downloadButton.classList.remove('processing');
     }
 }
 
