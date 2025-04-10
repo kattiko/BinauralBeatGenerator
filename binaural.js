@@ -727,6 +727,21 @@ async function generateAndDownloadAudio() {
     masterGain.gain.value = 0.2; // 20% volume
     masterGain.connect(offlineCtx.destination);
     
+    // Calculate total size estimate for user feedback
+    const totalSizeEstimateMB = (sessionLengthSeconds * 44100 * 4 / 1024 / 1024).toFixed(1); // 4 bytes per sample (16-bit stereo)
+    
+    // Update status with size info
+    downloadStatusDisplay.textContent = `Rendering ${totalSizeEstimateMB}MB audio file...`;
+    downloadButton.innerHTML = '<span class="spinner"></span> Rendering...';
+    
+    // Add progress tracking
+    let renderingStartTime = Date.now();
+    let progressInterval = setInterval(() => {
+        const elapsedSeconds = (Date.now() - renderingStartTime) / 1000;
+        const progressPercent = Math.min(95, (elapsedSeconds / sessionLengthSeconds) * 100);
+        progressBar.style.width = `${progressPercent}%`;
+    }, 100);
+    
     // Render each segment
     let currentTime = 0;
     for (let i = 0; i < sessionSegments.length; i++) {
@@ -791,12 +806,11 @@ async function generateAndDownloadAudio() {
         currentTime += segmentDurationSeconds;
     }
     
-    // Update status during rendering
-    downloadStatusDisplay.textContent = 'Rendering audio...';
-    
     try {
         // Start rendering
+        downloadStatusDisplay.textContent = 'Rendering audio...';
         const renderedBuffer = await offlineCtx.startRendering();
+        clearInterval(progressInterval);
         
         // Convert to WAV
         downloadStatusDisplay.textContent = 'Creating WAV file...';
@@ -849,22 +863,3 @@ async function generateAndDownloadAudio() {
         downloadButton.innerHTML = 'Download';
         downloadButton.classList.remove('processing');
     }
-}
-
-// Event listeners
-playButton.addEventListener('click', togglePlayPause);
-restartButton.addEventListener('click', handleRestart);
-downloadButton.addEventListener('click', generateAndDownloadAudio);
-
-// Handle visibility change to update playback state
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && isPlaying) {
-        // Keep playing but make sure media session is active
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'playing';
-        }
-    }
-});
-
-// Initialize with example instructions
-instructionsTextarea.value = '10 to 7hz 1 hr';
