@@ -880,13 +880,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Optional: Add event listener for space key to toggle play/pause
        document.addEventListener('keydown', function(event) {
-        if (event.code === 'Space') {
-            // Check if the active element is NOT the instructions textarea
-            if (document.activeElement !== instructionsTextarea) {
-                event.preventDefault(); // Prevent page scrolling
-                togglePlayPause();
-            }
+    if (event.code === 'Space') {
+        // First check if we're in the textarea
+        if (document.activeElement === instructionsTextarea) {
+            // Do nothing - allow default space behavior for typing
+            return; // Important: exit the handler completely
         }
+        
+        // If we got here, we're not in the textarea
+        event.preventDefault(); // Prevent page scrolling
+        togglePlayPause();
+    }
             // If we're in the textarea, allow default behavior (typing a space)
     });
 }); // <- This closing bracket was missing
