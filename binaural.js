@@ -708,6 +708,9 @@ function writeString(view, offset, string) {
 // Replace the generateAndDownloadAudio function with this chunked approach
 
 // Generate and download WAV file containing the binaural beats session using chunked rendering
+// Replace the generateAndDownloadAudio function with this chunked approach
+
+// Generate and download WAV file containing the binaural beats session using chunked rendering
 async function generateAndDownloadAudio() {
     // Check if valid instructions exist
     const parsedSegments = parseInstructions(instructionsTextarea.value);
@@ -744,8 +747,8 @@ async function generateAndDownloadAudio() {
         // Define chunk size (30 minutes per render chunk)
         const CHUNK_SIZE_SECONDS = 30 * 60; // 30 minutes per chunk
         
-        // Define output file size limit (~1.8GB to stay well under 2GB limit)
-        const MAX_OUTPUT_SAMPLES = 225000000; // About 1.8GB for stereo 16-bit WAV
+        // Define output file size limit (~1GB to be safely under 2GB limit)
+        const MAX_OUTPUT_SAMPLES = 120000000; // About 1GB for stereo 16-bit WAV
         const MAX_OUTPUT_SECONDS = Math.floor(MAX_OUTPUT_SAMPLES / 44100);
         
         // Calculate how many output files we'll need
