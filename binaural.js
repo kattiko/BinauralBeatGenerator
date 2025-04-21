@@ -705,6 +705,9 @@ function writeString(view, offset, string) {
 }
 
 // Generate and download WAV file containing the binaural beats session
+// Replace the generateAndDownloadAudio function with this chunked approach
+
+// Generate and download WAV file containing the binaural beats session using chunked rendering
 async function generateAndDownloadAudio() {
     // Check if valid instructions exist
     const parsedSegments = parseInstructions(instructionsTextarea.value);
@@ -727,103 +730,71 @@ async function generateAndDownloadAudio() {
     // Get base tone frequency
     const baseTone = parseFloat(baseToneInput.value) || 432;
     
-    // Create offline context for rendering - use reasonable sample rate for good quality
-    const sampleRate = 44100;
-    const offlineCtx = new OfflineAudioContext(2, sampleRate * sessionLengthSeconds, sampleRate);
-    
-    // Create master gain node for the offline context
-    const masterGain = offlineCtx.createGain();
-    masterGain.gain.value = 0.2; // 20% volume
-    masterGain.connect(offlineCtx.destination);
-    
     // Calculate total size estimate for user feedback
     const totalSizeEstimateMB = (sessionLengthSeconds * 44100 * 4 / 1024 / 1024).toFixed(1); // 4 bytes per sample (16-bit stereo)
     
     // Update status with size info
-    downloadStatusDisplay.textContent = `Rendering ${totalSizeEstimateMB}MB audio file...`;
-    downloadButton.innerHTML = '<span class="spinner"></span> Rendering...';
-    
-    // Add progress tracking
-    let renderingStartTime = Date.now();
-    let progressInterval = setInterval(() => {
-        const elapsedSeconds = (Date.now() - renderingStartTime) / 1000;
-        const progressPercent = Math.min(95, (elapsedSeconds / sessionLengthSeconds) * 100);
-        progressBar.style.width = `${progressPercent}%`;
-    }, 100);
-    
-    // Render each segment
-    let currentTime = 0;
-    for (let i = 0; i < sessionSegments.length; i++) {
-        const segment = sessionSegments[i];
-        const segmentDurationSeconds = segment.duration / 1000;
-        
-        // Create oscillator pair for this segment
-        const oscPair = createOscillatorPair(offlineCtx);
-        oscPair.merger.connect(masterGain);
-        
-        // Function to calculate frequency at a specific time point
-        const getFrequencyAtTime = (timeOffset) => {
-            const progress = timeOffset / segmentDurationSeconds;
-            if (segment.type === 'stable') {
-                return segment.startFreq;
-            } else {
-                return segment.startFreq + (segment.endFreq - segment.startFreq) * progress;
-            }
-        };
-        
-        // Start oscillators
-        oscPair.left.start(currentTime);
-        oscPair.right.start(currentTime);
-        
-        // Set initial parameters
-        let lastUpdateTime = currentTime;
-        const updateInterval = 0.05; // Update frequency every 50ms for smooth transitions
-        
-        // Set initial frequencies
-        const initialFreq = getFrequencyAtTime(0);
-        updateOscillatorFrequencies(oscPair, initialFreq, baseTone, offlineCtx, currentTime);
-        
-        // Set gains with smooth fade-in to prevent clicks
-        oscPair.leftGain.gain.setValueAtTime(0.001, currentTime);
-        oscPair.rightGain.gain.setValueAtTime(0.001, currentTime);
-        oscPair.leftGain.gain.exponentialRampToValueAtTime(1, currentTime + 0.1);
-        oscPair.rightGain.gain.exponentialRampToValueAtTime(1, currentTime + 0.1);
-        
-        // If this is a transition segment, update frequencies gradually
-        if (segment.type === 'transition') {
-            for (let t = updateInterval; t < segmentDurationSeconds; t += updateInterval) {
-                const freq = getFrequencyAtTime(t);
-                updateOscillatorFrequencies(oscPair, freq, baseTone, offlineCtx, currentTime + t);
-            }
-        }
-        
-        // Schedule the end of this segment with fade-out if it's not the last segment
-        if (i < sessionSegments.length - 1) {
-            // Fade out at end of segment
-            const fadeOutStart = currentTime + segmentDurationSeconds - CROSSFADE_DURATION;
-            oscPair.leftGain.gain.setValueAtTime(1, fadeOutStart);
-            oscPair.rightGain.gain.setValueAtTime(1, fadeOutStart);
-            oscPair.leftGain.gain.exponentialRampToValueAtTime(0.001, currentTime + segmentDurationSeconds);
-            oscPair.rightGain.gain.exponentialRampToValueAtTime(0.001, currentTime + segmentDurationSeconds);
-        }
-        
-        // Stop the oscillators at the end of this segment
-        oscPair.left.stop(currentTime + segmentDurationSeconds + 0.1);
-        oscPair.right.stop(currentTime + segmentDurationSeconds + 0.1);
-        
-        // Update current time for next segment
-        currentTime += segmentDurationSeconds;
-    }
+    downloadStatusDisplay.textContent = `Preparing ${totalSizeEstimateMB}MB audio file...`;
     
     try {
-        // Start rendering
-        downloadStatusDisplay.textContent = 'Rendering audio...';
-        const renderedBuffer = await offlineCtx.startRendering();
-        clearInterval(progressInterval);
+        // Set up progress tracking
+        let overallProgress = 0;
+        progressBar.style.width = '0%';
+        
+        // Define chunk size (5 minutes per chunk)
+        const CHUNK_SIZE_SECONDS = 5 * 60; // 5 minutes per chunk
+        
+        // Create a list to track rendered chunks
+        const audioChunks = [];
+        
+        // Split the session into time chunks
+        const totalChunks = Math.ceil(sessionLengthSeconds / CHUNK_SIZE_SECONDS);
+        
+        // Process each chunk
+        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+            const chunkStartTime = chunkIndex * CHUNK_SIZE_SECONDS;
+            const chunkEndTime = Math.min((chunkIndex + 1) * CHUNK_SIZE_SECONDS, sessionLengthSeconds);
+            const chunkDuration = chunkEndTime - chunkStartTime;
+            
+            // Update status
+            downloadStatusDisplay.textContent = `Rendering chunk ${chunkIndex + 1}/${totalChunks}...`;
+            downloadButton.innerHTML = `<span class="spinner"></span> Chunk ${chunkIndex + 1}/${totalChunks}`;
+            
+            // Render this chunk
+            const chunkBuffer = await renderAudioChunk(
+                sessionSegments, 
+                chunkStartTime, 
+                chunkDuration, 
+                baseTone,
+                (progress) => {
+                    // Calculate overall progress considering all chunks
+                    const chunkContribution = progress / totalChunks;
+                    const baseProgress = (chunkIndex / totalChunks) * 100;
+                    progressBar.style.width = `${baseProgress + chunkContribution}%`;
+                }
+            );
+            
+            // Store the chunk
+            audioChunks.push(chunkBuffer);
+            
+            // Update progress
+            overallProgress = ((chunkIndex + 1) / totalChunks) * 90; // Leave 10% for final processing
+            progressBar.style.width = `${overallProgress}%`;
+        }
+        
+        // Update status
+        downloadStatusDisplay.textContent = 'Combining audio chunks...';
+        downloadButton.innerHTML = '<span class="spinner"></span> Finalizing...';
+        
+        // Combine all chunks into a single AudioBuffer
+        const finalBuffer = combineAudioChunks(audioChunks);
+        
+        // Update progress
+        progressBar.style.width = '95%';
         
         // Convert to WAV
         downloadStatusDisplay.textContent = 'Creating WAV file...';
-        const wavBuffer = audioBufferToWav(renderedBuffer);
+        const wavBuffer = audioBufferToWav(finalBuffer);
         
         // Create a blob and trigger download
         const blob = new Blob([wavBuffer], { type: 'audio/wav' });
@@ -865,15 +836,195 @@ async function generateAndDownloadAudio() {
         }, 5000);
     } catch (error) {
         console.error('Error creating audio file:', error);
-        downloadStatusDisplay.textContent = 'Error creating audio file. Please try again.';
+        downloadStatusDisplay.textContent = `Error: ${error.message}. Try smaller duration.`;
     } finally {
         // Reset button state
         downloadButton.disabled = false;
         downloadButton.innerHTML = 'Download';
         downloadButton.classList.remove('processing');
     }
+}
 
+// Function to render a specific chunk of audio for a specific time range
+async function renderAudioChunk(segments, startTimeSeconds, durationSeconds, baseTone, progressCallback) {
+    // Create offline context for just this chunk
+    const sampleRate = 44100;
+    const offlineCtx = new OfflineAudioContext(2, sampleRate * durationSeconds, sampleRate);
+    
+    // Create master gain node for the offline context
+    const masterGain = offlineCtx.createGain();
+    masterGain.gain.value = 0.2; // 20% volume
+    masterGain.connect(offlineCtx.destination);
+    
+    // Figure out which segments overlap with this chunk
+    let currentSegmentStartTime = 0; // in seconds
+    let overlappingSegments = [];
+    
+    for (let i = 0; i < segments.length; i++) {
+        const segmentDurationSec = segments[i].duration / 1000;
+        const segmentEndTime = currentSegmentStartTime + segmentDurationSec;
+        
+        // Check if this segment overlaps with our chunk
+        if (segmentEndTime > startTimeSeconds && currentSegmentStartTime < startTimeSeconds + durationSeconds) {
+            overlappingSegments.push({
+                segment: segments[i],
+                startTime: currentSegmentStartTime,
+                endTime: segmentEndTime
+            });
+        }
+        
+        // Move to next segment
+        currentSegmentStartTime = segmentEndTime;
     }
+    
+    // Process each overlapping segment
+    for (let i = 0; i < overlappingSegments.length; i++) {
+        const { segment, startTime, endTime } = overlappingSegments[i];
+        
+        // Calculate how this segment overlaps with our chunk
+        const segmentStartInChunk = Math.max(0, startTime - startTimeSeconds);
+        const segmentEndInChunk = Math.min(durationSeconds, endTime - startTimeSeconds);
+        const segmentDurationInChunk = segmentEndInChunk - segmentStartInChunk;
+        
+        if (segmentDurationInChunk <= 0) continue;
+        
+        // Create oscillator pair for this segment portion
+        const oscPair = createOscillatorPair(offlineCtx);
+        oscPair.merger.connect(masterGain);
+        
+        // Calculate where in the segment we're starting
+        const offsetIntoSegment = Math.max(0, startTimeSeconds - startTime);
+        const segmentProgress = offsetIntoSegment / (segment.duration / 1000);
+        
+        // Function to calculate frequency at a specific point in the segment
+        const getFrequencyAtProgress = (progress) => {
+            if (segment.type === 'stable') {
+                return segment.startFreq;
+            } else {
+                return segment.startFreq + (segment.endFreq - segment.startFreq) * progress;
+            }
+        };
+        
+        // Start oscillators at the correct chunk time
+        oscPair.left.start(segmentStartInChunk);
+        oscPair.right.start(segmentStartInChunk);
+        
+        // Set initial frequencies based on where we are in the segment
+        const initialFreq = getFrequencyAtProgress(segmentProgress);
+        updateOscillatorFrequencies(oscPair, initialFreq, baseTone, offlineCtx, segmentStartInChunk);
+        
+        // Set initial gain (use fade-in if at segment start)
+        if (offsetIntoSegment < 0.1) {
+            // Fade in at segment start
+            oscPair.leftGain.gain.setValueAtTime(0.001, segmentStartInChunk);
+            oscPair.rightGain.gain.setValueAtTime(0.001, segmentStartInChunk);
+            oscPair.leftGain.gain.exponentialRampToValueAtTime(1, segmentStartInChunk + 0.1);
+            oscPair.rightGain.gain.exponentialRampToValueAtTime(1, segmentStartInChunk + 0.1);
+        } else {
+            // Start at full volume if in middle of segment
+            oscPair.leftGain.gain.setValueAtTime(1, segmentStartInChunk);
+            oscPair.rightGain.gain.setValueAtTime(1, segmentStartInChunk);
+        }
+        
+        // If transition segment, update frequencies at regular intervals
+        if (segment.type === 'transition') {
+            const updateInterval = 0.05; // Update every 50ms
+            
+            // Calculate start and end progress for this chunk within the segment
+            const startProgress = segmentProgress;
+            const endProgress = (offsetIntoSegment + segmentDurationInChunk) / (segment.duration / 1000);
+            
+            // Schedule frequency changes
+            for (let p = startProgress; p <= endProgress; p += updateInterval / (segment.duration / 1000)) {
+                const timeInChunk = segmentStartInChunk + (p - startProgress) * (segment.duration / 1000);
+                if (timeInChunk >= segmentStartInChunk && timeInChunk <= segmentEndInChunk) {
+                    const freq = getFrequencyAtProgress(Math.min(1, p));
+                    updateOscillatorFrequencies(oscPair, freq, baseTone, offlineCtx, timeInChunk);
+                }
+            }
+        }
+        
+        // Apply fade-out if this is the end of the segment
+        const isSegmentEnd = Math.abs(segmentEndInChunk - durationSeconds) < 0.1 || 
+                             Math.abs(endTime - (startTimeSeconds + segmentEndInChunk)) < 0.1;
+                             
+        if (isSegmentEnd && i < overlappingSegments.length - 1) {
+            const fadeOutStart = segmentEndInChunk - Math.min(CROSSFADE_DURATION, segmentDurationInChunk/2);
+            oscPair.leftGain.gain.setValueAtTime(1, fadeOutStart);
+            oscPair.rightGain.gain.setValueAtTime(1, fadeOutStart);
+            oscPair.leftGain.gain.exponentialRampToValueAtTime(0.001, segmentEndInChunk);
+            oscPair.rightGain.gain.exponentialRampToValueAtTime(0.001, segmentEndInChunk);
+        }
+        
+        // Stop the oscillators
+        oscPair.left.stop(segmentEndInChunk + 0.01);
+        oscPair.right.stop(segmentEndInChunk + 0.01);
+    }
+    
+    // Set up a timer to report progress periodically during rendering
+    let renderStartTime = Date.now();
+    let progressReportInterval = setInterval(() => {
+        // Estimate progress based on elapsed time vs expected duration
+        const elapsed = (Date.now() - renderStartTime) / 1000;
+        const estimatedProgress = Math.min(95, (elapsed / durationSeconds) * 100);
+        if (progressCallback) progressCallback(estimatedProgress);
+    }, 100);
+    
+    // Render the audio
+    try {
+        const renderedBuffer = await offlineCtx.startRendering();
+        clearInterval(progressReportInterval);
+        return renderedBuffer;
+    } catch (error) {
+        clearInterval(progressReportInterval);
+        throw error;
+    }
+}
+
+// Combine multiple AudioBuffers into one
+function combineAudioChunks(audioChunks) {
+    if (audioChunks.length === 0) {
+        throw new Error("No audio chunks to combine");
+    }
+    
+    if (audioChunks.length === 1) {
+        return audioChunks[0]; // Just return the single chunk
+    }
+    
+    // Get total length and create a new buffer
+    const sampleRate = audioChunks[0].sampleRate;
+    const numChannels = audioChunks[0].numberOfChannels;
+    let totalLength = 0;
+    
+    // Calculate total length
+    for (const chunk of audioChunks) {
+        totalLength += chunk.length;
+    }
+    
+    // Create new buffer of combined size
+    const combinedBuffer = new AudioBuffer({
+        numberOfChannels: numChannels,
+        length: totalLength,
+        sampleRate: sampleRate
+    });
+    
+    // Copy data from each chunk
+    let position = 0;
+    for (const chunk of audioChunks) {
+        for (let channel = 0; channel < numChannels; channel++) {
+            const chunkData = chunk.getChannelData(channel);
+            const combinedData = combinedBuffer.getChannelData(channel);
+            
+            // Copy this chunk's data into the combined buffer
+            for (let i = 0; i < chunk.length; i++) {
+                combinedData[position + i] = chunkData[i];
+            }
+        }
+        position += chunk.length;
+    }
+    
+    return combinedBuffer;
+}
 
 // Add this immediately after the last function (after the closing brace of generateAndDownloadAudio)
 // This will set up the event listeners when the DOM is fully loaded
