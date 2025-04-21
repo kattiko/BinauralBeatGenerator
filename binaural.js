@@ -741,83 +741,138 @@ async function generateAndDownloadAudio() {
         let overallProgress = 0;
         progressBar.style.width = '0%';
         
-        // Define chunk size (5 minutes per chunk)
-        const CHUNK_SIZE_SECONDS = 5 * 60; // 5 minutes per chunk
+        // Define chunk size (30 minutes per render chunk)
+        const CHUNK_SIZE_SECONDS = 30 * 60; // 30 minutes per chunk
         
-        // Create a list to track rendered chunks
-        const audioChunks = [];
+        // Define output file size limit (~1.8GB to stay well under 2GB limit)
+        const MAX_OUTPUT_SAMPLES = 225000000; // About 1.8GB for stereo 16-bit WAV
+        const MAX_OUTPUT_SECONDS = Math.floor(MAX_OUTPUT_SAMPLES / 44100);
         
-        // Split the session into time chunks
-        const totalChunks = Math.ceil(sessionLengthSeconds / CHUNK_SIZE_SECONDS);
+        // Calculate how many output files we'll need
+        const outputFileCount = Math.ceil(sessionLengthSeconds / MAX_OUTPUT_SECONDS);
         
-        // Process each chunk
-        for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-            const chunkStartTime = chunkIndex * CHUNK_SIZE_SECONDS;
-            const chunkEndTime = Math.min((chunkIndex + 1) * CHUNK_SIZE_SECONDS, sessionLengthSeconds);
-            const chunkDuration = chunkEndTime - chunkStartTime;
-            
-            // Update status
-            downloadStatusDisplay.textContent = `Rendering chunk ${chunkIndex + 1}/${totalChunks}...`;
-            downloadButton.innerHTML = `<span class="spinner"></span> Chunk ${chunkIndex + 1}/${totalChunks}`;
-            
-            // Render this chunk
-            const chunkBuffer = await renderAudioChunk(
-                sessionSegments, 
-                chunkStartTime, 
-                chunkDuration, 
-                baseTone,
-                (progress) => {
-                    // Calculate overall progress considering all chunks
-                    const chunkContribution = progress / totalChunks;
-                    const baseProgress = (chunkIndex / totalChunks) * 100;
-                    progressBar.style.width = `${baseProgress + chunkContribution}%`;
-                }
-            );
-            
-            // Store the chunk
-            audioChunks.push(chunkBuffer);
-            
-            // Update progress
-            overallProgress = ((chunkIndex + 1) / totalChunks) * 90; // Leave 10% for final processing
-            progressBar.style.width = `${overallProgress}%`;
-        }
-        
-        // Update status
-        downloadStatusDisplay.textContent = 'Combining audio chunks...';
-        downloadButton.innerHTML = '<span class="spinner"></span> Finalizing...';
-        
-        // Combine all chunks into a single AudioBuffer
-        const finalBuffer = combineAudioChunks(audioChunks);
-        
-        // Update progress
-        progressBar.style.width = '95%';
-        
-        // Convert to WAV
-        downloadStatusDisplay.textContent = 'Creating WAV file...';
-        const wavBuffer = audioBufferToWav(finalBuffer);
-        
-        // Create a blob and trigger download
-        const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-        
-        // Generate filename based on current date/time
+        // Generate timestamp for filenames
         const now = new Date();
         const timestamp = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-        const filename = `binaural_beats_${timestamp}.wav`;
         
-        // Create download link
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
+        // Create wrapper div for download links if multiple files
+        let downloadContainer = null;
+        if (outputFileCount > 1) {
+            downloadContainer = document.createElement('div');
+            downloadContainer.id = 'download-links';
+            downloadContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); max-width: 300px; z-index: 1000;';
+            
+            const header = document.createElement('h3');
+            header.textContent = 'Your audio files (download all)';
+            header.style.marginTop = '0';
+            downloadContainer.appendChild(header);
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '×';
+            closeBtn.style.cssText = 'position: absolute; top: 5px; right: 10px; background: none; border: none; font-size: 18px; cursor: pointer;';
+            closeBtn.onclick = () => document.body.removeChild(downloadContainer);
+            downloadContainer.appendChild(closeBtn);
+            
+            document.body.appendChild(downloadContainer);
+        }
         
-        // Trigger download
-        a.click();
-        
-        // Clean up
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        // Process each output file
+        for (let fileIndex = 0; fileIndex < outputFileCount; fileIndex++) {
+            // Calculate time range for this file
+            const fileStartTime = fileIndex * MAX_OUTPUT_SECONDS;
+            const fileEndTime = Math.min((fileIndex + 1) * MAX_OUTPUT_SECONDS, sessionLengthSeconds);
+            const fileDuration = fileEndTime - fileStartTime;
+            
+            // Update status
+            downloadStatusDisplay.textContent = `Processing file ${fileIndex + 1}/${outputFileCount}...`;
+            downloadButton.innerHTML = `<span class="spinner"></span> File ${fileIndex + 1}/${outputFileCount}`;
+            
+            // Create a list to track rendered chunks for this file
+            const fileChunks = [];
+            
+            // Split file time range into smaller processing chunks
+            const fileChunkCount = Math.ceil(fileDuration / CHUNK_SIZE_SECONDS);
+            
+            // Process each chunk within this file
+            for (let chunkIndex = 0; chunkIndex < fileChunkCount; chunkIndex++) {
+                const chunkStartTime = fileStartTime + (chunkIndex * CHUNK_SIZE_SECONDS);
+                const chunkEndTime = Math.min(fileStartTime + ((chunkIndex + 1) * CHUNK_SIZE_SECONDS), fileEndTime);
+                const chunkDuration = chunkEndTime - chunkStartTime;
+                
+                // Update status
+                downloadStatusDisplay.textContent = `File ${fileIndex + 1}/${outputFileCount}, chunk ${chunkIndex + 1}/${fileChunkCount}...`;
+                downloadButton.innerHTML = `<span class="spinner"></span> Processing...`;
+                
+                // Render this chunk
+                const chunkBuffer = await renderAudioChunk(
+                    sessionSegments, 
+                    chunkStartTime, 
+                    chunkDuration, 
+                    baseTone,
+                    (progress) => {
+                        // Calculate overall progress across all files and chunks
+                        const singleChunkWeight = 1 / (outputFileCount * fileChunkCount);
+                        const baseProgress = (fileIndex * fileChunkCount + chunkIndex) * singleChunkWeight * 100;
+                        const chunkContribution = progress * singleChunkWeight;
+                        progressBar.style.width = `${baseProgress + chunkContribution}%`;
+                    }
+                );
+                
+                // Store the chunk
+                fileChunks.push(chunkBuffer);
+                
+                // Update progress
+                const overallProgress = ((fileIndex * fileChunkCount + chunkIndex + 1) / (outputFileCount * fileChunkCount)) * 90;
+                progressBar.style.width = `${overallProgress}%`;
+            }
+            
+            // Update status
+            downloadStatusDisplay.textContent = `Creating file ${fileIndex + 1}/${outputFileCount}...`;
+            downloadButton.innerHTML = '<span class="spinner"></span> Finalizing...';
+            
+            // Combine the chunks for this file
+            const fileBuffer = combineAudioChunks(fileChunks);
+            
+            // Convert to WAV
+            const wavBuffer = audioBufferToWav(fileBuffer);
+            
+            // Create a blob and trigger download
+            const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+            
+            // Generate filename
+            const partLabel = outputFileCount > 1 ? `_part${fileIndex + 1}` : '';
+            const filename = `binaural_beats_${timestamp}${partLabel}.wav`;
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            
+            if (outputFileCount === 1) {
+                // Single file - download automatically
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                // Multiple files - add to download links container
+                const linkWrapper = document.createElement('div');
+                linkWrapper.style.margin = '10px 0';
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.textContent = `Part ${fileIndex + 1} (${Math.round(blob.size / 1024 / 1024)}MB)`;
+                a.style.cssText = 'display: block; margin-bottom: 5px; color: blue; text-decoration: underline;';
+                
+                linkWrapper.appendChild(a);
+                downloadContainer.appendChild(linkWrapper);
+            }
+            
+            // Update progress
+            progressBar.style.width = `${90 + (fileIndex + 1) / outputFileCount * 10}%`;
+        }
         
         // Update status and reset progress bar
         progressBar.style.width = '100%';
@@ -825,15 +880,21 @@ async function generateAndDownloadAudio() {
             progressBar.style.width = '0%';
         }, 1000);
         
-        // Show completion message with file size
-        const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-        downloadStatusDisplay.textContent = `Download complete! File size: ${fileSizeMB}MB`;
+        // Show completion message
+        if (outputFileCount === 1) {
+            downloadStatusDisplay.textContent = 'Download complete!';
+        } else {
+            downloadStatusDisplay.textContent = `Generated ${outputFileCount} files. Please download all parts.`;
+        }
+        
         downloadButton.innerHTML = 'Download';
         
-        // Clear message after a delay
-        setTimeout(() => {
-            downloadStatusDisplay.textContent = '';
-        }, 5000);
+        // Clear message after a delay (only if single file)
+        if (outputFileCount === 1) {
+            setTimeout(() => {
+                downloadStatusDisplay.textContent = '';
+            }, 5000);
+        }
     } catch (error) {
         console.error('Error creating audio file:', error);
         downloadStatusDisplay.textContent = `Error: ${error.message}. Try smaller duration.`;
